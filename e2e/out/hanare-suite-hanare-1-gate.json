@@ -1,0 +1,37 @@
+{
+  "pr": 1,
+  "input": {
+    "headSha": "0083de9309a9dad3cc13572d2f1462521093fb7c",
+    "author": {
+      "login": "heyimada",
+      "bot": false,
+      "permission": "admin"
+    },
+    "fork": false,
+    "draft": false,
+    "noAutomerge": false,
+    "eligibility": {
+      "eligible": false,
+      "reason": "touches sensitive paths: e2e/ribbon.sh"
+    },
+    "reviews": {
+      "bugs": null,
+      "security": null
+    },
+    "openFindings": 0,
+    "dismissedFindings": 0,
+    "changesRequestedBy": [],
+    "appCommits": 0,
+    "ci": "pending"
+  },
+  "decision": {
+    "wouldApprove": false,
+    "status": "human",
+    "reasons": [
+      "needs human approval: not eligible for auto-merge: touches sensitive paths: e2e/ribbon.sh",
+      "the bugs review hasn't finished for 0083de9",
+      "the security review hasn't finished for 0083de9",
+      "CI is still running"
+    ]
+  }
+}

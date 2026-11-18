@@ -1,0 +1,22 @@
+{
+  "project": "Example, a web app: a Node server (server/), a React client (client/) and Playwright tests (e2e/). CONTRIBUTING.md describes the layout and conventions.",
+  "botLogin": "example-review[bot]",
+  "markerTag": "example-review",
+  "reportOnly": true,
+  "checks": "the typecheck, unit tests or the e2e suite",
+  "focus": {
+    "correctness": "Logic errors: wrong conditions, off-by-one, wrong results, unhandled failures, data that is lost or corrupted.",
+    "lifecycle": "Lifecycle and concurrency: processes, streams, sockets, file handles, transactions or timers left open, races, ordering, cleanup on error paths.",
+    "contracts": "Broken contracts between modules: callers and callees that disagree, changed API or response shapes, a schema change without a migration, invariants one module relies on that another breaks.",
+    "security": "Security: authentication and access control, session handling, path traversal, injection, SSRF, secrets in logs or responses."
+  },
+  "eligibility": {
+    "storedData": "database, files on disk, config files",
+    "interfaces": "HTTP routes, the client's URLs and any command-line flags",
+    "alwaysNotLow": "how requests are authenticated or authorized, how user input reaches the shell, the filesystem or SQL, how untrusted content is rendered as HTML, security headers, secrets, rate limits or resource limits"
+  },
+  "lowRisk": ["**/*.md", "LICENSE"],
+  "sensitive": ["package.json", "package-lock.json", "server/auth/**"],
+  "requiredChecks": [],
+  "fixTrailer": "Written-by: example-review /fix"
+}
