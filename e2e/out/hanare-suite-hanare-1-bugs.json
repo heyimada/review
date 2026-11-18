@@ -1,0 +1,38 @@
+{
+  "pr": 1,
+  "lens": "bugs",
+  "head": "0083de9309a9dad3cc13572d2f1462521093fb7c",
+  "round": 1,
+  "state": "done",
+  "sinceSha": null,
+  "scopeFiles": 13,
+  "candidates": 3,
+  "eligibility": "missing",
+  "resolved": [],
+  "findings": [
+    {
+      "file": "apps/fude/src/main.rs",
+      "line": 119,
+      "lens": "contracts",
+      "severity": "important",
+      "title": "⌘F1 ribbon toggle removed on macOS even though the PR says it still works, and the regression script was edited to hide it",
+      "failure": "The old binding was `mod+f1`, which is ⌘F1 on a Mac. The new list is `Key::windows(\"ctrl+f1\")` and `Key::mac(\"cmd+alt+r\")`, so on macOS ⌘F1 is no longer bound. A Mac user who presses ⌘F1 sees nothing happen, but the PR description says \"⌘F1 still works\". The plan requires e2e/ribbon.sh to pass unchanged, yet e2e/scripts/fude-commands.json had its ⌘F1 presses (t=2.30/2.50) swapped for ⌥⌘R. That is why the existing collapse/expand checks still pass and the lost binding goes unnoticed. Either add `Key::mac(\"cmd+f1\")` after ⌥⌘R, or correct the description and restore the original script.",
+      "fingerprint": "bcc29aebd2fff96b"
+    },
+    {
+      "file": "e2e/ribbon.sh",
+      "line": 76,
+      "lens": "contracts",
+      "severity": "nit",
+      "title": "Windows zoom-in tooltip check always passes",
+      "failure": "The loop runs `grep -qF '\"Vergrößern\"'` on the tree. The zoom-in node always has `\"label\": \"Vergrößern\"`, so the grep matches even when `help` is \"Vergrößern (Strg++)\" or \"Vergrößern (Strg+=)\". The check cannot detect a Windows zoom shortcut leaking into the tooltip, yet it is logged as `PASS tooltip (windows): Vergrößern`. It should match the help field, e.g. `\"help\": \"Vergrößern\"`.",
+      "fingerprint": "b59e69004cf84afc",
+      "suggestion": {
+        "endLine": 78,
+        "code": "for tip in \"Wiederholen (Strg+Y)\" \"Menüband ein- oder ausblenden (Strg+F1)\" \"Vergrößern\"; do\n  if grep -qF \"\\\"help\\\": \\\"$tip\\\"\" \"$tmp/tooltips-win.json\"; then echo \"PASS tooltip (windows): $tip\" | tee -a \"$log\"; else echo \"FAIL tooltip (windows): $tip\" | tee -a \"$log\"; fail=1; fi\ndone"
+      }
+    }
+  ],
+  "errors": [],
+  "costUsd": 2.6379
+}

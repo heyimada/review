@@ -9,6 +9,11 @@ name: Merge gate
 # caller's job needs contents: read, pull-requests: read, checks: read and id-token: write.
 on:
   workflow_call:
+    # Read from the review and fix environments of the calling repository, which the jobs below name. The caller passes
+    # nothing: secrets: inherit doesn't cross account owners.
+    secrets:
+      REVIEW_APP_PRIVATE_KEY:
+        required: false
 
 permissions: {}
 

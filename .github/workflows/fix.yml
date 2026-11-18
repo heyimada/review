@@ -11,6 +11,13 @@ name: Fix
 # id-token: write; the fix environment holds FIX_CLAUDE_CODE_OAUTH_TOKEN.
 on:
   workflow_call:
+    # Read from the review and fix environments of the calling repository, which the jobs below name. The caller passes
+    # nothing: secrets: inherit doesn't cross account owners.
+    secrets:
+      REVIEW_APP_PRIVATE_KEY:
+        required: false
+      FIX_CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
 
 permissions: {}
 

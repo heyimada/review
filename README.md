@@ -21,9 +21,11 @@ The engine runs on `pull_request_target`, `workflow_run` and `issue_comment`. Ea
 1. **App.** Install the review GitHub App on the repository, with contents, pull requests and checks set to read and write.
 2. **Environments.** Create a `review` environment holding the variable `REVIEW_APP_CLIENT_ID` and the secrets `REVIEW_APP_PRIVATE_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`. For `/fix`, also create a `fix` environment holding `FIX_CLAUDE_CODE_OAUTH_TOKEN`. Restrict both to the default branch.
 3. **Config.** Add `.github/review.json`, starting from [examples/review.json](examples/review.json) or from ether's or hanare's config. `src/config.ts` documents every key. An unknown or missing key fails the run instead of being ignored. Start with `"reportOnly": true`.
-4. **Workflows.** Add the callers for review, merge gate, review trigger and fix, as in [hanare's `.github/workflows`](https://github.com/hanare-suite/hanare/tree/main/.github/workflows). Pin `uses:` to a full commit SHA; Dependabot keeps it current.
-5. **CODEOWNERS.** List the sensitive paths there too. The config check warns about any sensitive glob no CODEOWNERS entry covers.
+4. **Workflows.** Add the callers for review, merge gate, review trigger and fix, and the `Review config` job in CI, as in [hanare's `.github/workflows`](https://github.com/hanare-suite/hanare/tree/main/.github/workflows). Pin every `uses:` to the same full commit SHA. The callers pass no secrets: each job reads them from the `review` or `fix` environment it names.
+5. **CODEOWNERS.** List the sensitive paths in `.github/CODEOWNERS` too. The `Review config` check fails on a sensitive glob that no entry covers, and on any config error. A broken config on the default branch would stop every review.
 6. **Branch protection.** Require the CI checks named in `requiredChecks` and allow auto-merge. Turn `reportOnly` off once the findings have proved useful.
+
+One App can serve several owners, but its private key can then mint tokens for every installation. Anyone who can read one repository's `review` environment can act as the App on all of them, so use one App per owner when the maintainers differ.
 
 The `pull_request_target` workflows only take effect once they are on the default branch, so the first pull request that adds them isn't reviewed by them.
 

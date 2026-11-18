@@ -88,8 +88,14 @@ export function parseConfig(raw: unknown): RepoConfig {
     for (const k of Object.keys(o)) if (!keys.includes(k)) fail(`unknown key ${at}${k}`);
   };
   const text = (v: unknown, at: string) => (typeof v === "string" && v.trim() ? v : fail(`${at} must be a non-empty string`));
-  const texts = (v: unknown, at: string) => (Array.isArray(v) && v.every((s) => typeof s === "string" && s.trim()) ? (v as string[]) : fail(`${at} must be a list of non-empty strings`));
-  const count = (v: unknown, at: string) => (Number.isInteger(v) && (v as number) > 0 ? (v as number) : fail(`${at} must be a positive integer`));
+  // Names compared with what GitHub reports, or matched line by line: one line, no padding.
+  const line = (v: unknown, at: string) => (typeof v === "string" && v.trim() && v === v.trim() && !/[\r\n]/.test(v) ? v : fail(`${at} must be one line with no surrounding spaces`));
+  const lines = (v: unknown, at: string) => (Array.isArray(v) ? v.map((x, i) => line(x, `${at}[${i}]`)) : fail(`${at} must be a list of strings`));
+  // Paths are matched relative to the repository root with no leading slash, so a CODEOWNERS-style "/a", "./a" or "dir/"
+  // would never match, and "!" negates in Bun's globs.
+  const globs = (v: unknown, at: string) =>
+    lines(v, at).map((g) => (/^(\/|\.\/|!)|\/$|\\/.test(g) ? fail(`${at}: "${g}" never matches a path; write it relative to the root, like src/** or a/b.ts`) : g));
+  const count = (v: unknown, at: string, max: number) => (Number.isInteger(v) && (v as number) > 0 && (v as number) <= max ? (v as number) : fail(`${at} must be a whole number from 1 to ${max}`));
   const required = (o: Record<string, unknown>, k: string, at: string) => (k in o ? o[k] : fail(`missing ${at}${k}`));
 
   const c = object(raw, "the config");
@@ -107,7 +113,10 @@ export function parseConfig(raw: unknown): RepoConfig {
 
   const reportOnly = get("reportOnly");
   if (typeof reportOnly !== "boolean") fail("reportOnly must be true or false");
-  const requiredChecks = texts(get("requiredChecks"), "requiredChecks");
+  const requiredChecks = lines(get("requiredChecks"), "requiredChecks");
+  const gateCheck = "gateCheck" in c ? line(c.gateCheck, "gateCheck") : DEFAULTS.gateCheck;
+  // The gate waits for every required check, so requiring its own would leave it waiting forever.
+  if (requiredChecks.includes(gateCheck)) fail(`requiredChecks can't include the gate's own check, ${gateCheck}`);
   // With no required checks the gate would approve and merge on the review alone.
   if (!reportOnly && !requiredChecks.length) fail("requiredChecks can't be empty unless reportOnly is on");
 
@@ -119,7 +128,8 @@ export function parseConfig(raw: unknown): RepoConfig {
   if ("depth" in c) {
     const d = object(c.depth, "depth");
     only(d, ["finders", "voters", "votesToPost"], "depth.");
-    depth = { finders: count(required(d, "finders", "depth."), "depth.finders"), voters: count(required(d, "voters", "depth."), "depth.voters"), votesToPost: count(required(d, "votesToPost", "depth."), "depth.votesToPost") };
+    // Each finder and voter is a full agent run, so the caps keep a typo from costing hundreds of runs per push.
+    depth = { finders: count(required(d, "finders", "depth."), "depth.finders", 8), voters: count(required(d, "voters", "depth."), "depth.voters", 8), votesToPost: count(required(d, "votesToPost", "depth."), "depth.votesToPost", 8) };
     if (depth.votesToPost > depth.voters) fail("depth.votesToPost can't be more than depth.voters, or nothing is ever posted");
   }
 
@@ -131,15 +141,15 @@ export function parseConfig(raw: unknown): RepoConfig {
     checks: text(get("checks"), "checks"),
     focus,
     eligibility,
-    lowRisk: texts(get("lowRisk"), "lowRisk"),
-    sensitive: texts(get("sensitive"), "sensitive"),
+    lowRisk: globs(get("lowRisk"), "lowRisk"),
+    sensitive: globs(get("sensitive"), "sensitive"),
     requiredChecks,
-    fixTrailer: text(get("fixTrailer"), "fixTrailer"),
+    fixTrailer: line(get("fixTrailer"), "fixTrailer"),
     model: "model" in c ? text(c.model, "model") : DEFAULTS.model,
     depth,
-    roundCap: "roundCap" in c ? count(c.roundCap, "roundCap") : DEFAULTS.roundCap,
-    gateCheck: "gateCheck" in c ? text(c.gateCheck, "gateCheck") : DEFAULTS.gateCheck,
-    noAutomergeLabel: "noAutomergeLabel" in c ? text(c.noAutomergeLabel, "noAutomergeLabel") : DEFAULTS.noAutomergeLabel,
+    roundCap: "roundCap" in c ? count(c.roundCap, "roundCap", 20) : DEFAULTS.roundCap,
+    gateCheck,
+    noAutomergeLabel: "noAutomergeLabel" in c ? line(c.noAutomergeLabel, "noAutomergeLabel") : DEFAULTS.noAutomergeLabel,
   };
 }
 
@@ -242,11 +252,12 @@ export function eligibility(paths: string[], verdict: EligibilityVerdict, hidden
   return { eligible: false, reason: verdict === "errored" ? "the eligibility check errored" : "no eligibility check for this commit" };
 }
 
-// `REVIEW_CONFIG=path bun src/config.ts` checks a config (loading this module already did) and warns about sensitive
-// paths that CODEOWNERS next to it doesn't cover.
+// `REVIEW_CONFIG=path bun src/config.ts` checks a config (loading this module already did) and fails on sensitive paths
+// that CODEOWNERS next to it doesn't cover.
 if (import.meta.main) {
   const owners = Bun.file(CONFIG_PATH.replace(/review\.json$/, "CODEOWNERS"));
-  if (CONFIG_PATH.endsWith("review.json") && (await owners.exists()))
-    for (const g of codeownersGaps(CONFIG, await owners.text())) console.log(`::warning::${g} is sensitive in ${CONFIG_PATH} but no CODEOWNERS entry covers it`);
+  const gaps = CONFIG_PATH.endsWith("review.json") && (await owners.exists()) ? codeownersGaps(CONFIG, await owners.text()) : [];
+  for (const g of gaps) console.log(`::error::${g} is sensitive in ${CONFIG_PATH} but no CODEOWNERS entry next to it covers it`);
+  if (gaps.length) process.exit(1);
   console.error(`${CONFIG_PATH}: ok`);
 }

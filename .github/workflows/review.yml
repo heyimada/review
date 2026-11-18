@@ -14,6 +14,13 @@ name: Review
 # variable), REVIEW_APP_PRIVATE_KEY and CLAUDE_CODE_OAUTH_TOKEN.
 on:
   workflow_call:
+    # Read from the review and fix environments of the calling repository, which the jobs below name. The caller passes
+    # nothing: secrets: inherit doesn't cross account owners.
+    secrets:
+      REVIEW_APP_PRIVATE_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
 
 permissions: {}
 

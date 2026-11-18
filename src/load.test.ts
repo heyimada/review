@@ -96,3 +96,28 @@ test("a sensitive path CODEOWNERS doesn't cover is reported", () => {
   expect(codeownersGaps(c, owners)).toEqual(["src/server/db/**"]);
   expect(codeownersGaps(c, `${owners}/src/server/db/ @a\n`)).toEqual([]);
 });
+
+test("a glob that can never match a repository path is an error", () => {
+  for (const g of ["/src/server/auth.ts", "src/server/db/", "./package.json", "!src/**", "src\\a.ts", " src/a.ts"]) {
+    rejects((c) => (c.sensitive = [g]), /sensitive/);
+    rejects((c) => (c.lowRisk = [g]), /lowRisk/);
+  }
+});
+
+test("names that must stay on one line can't hold a newline", () => {
+  rejects((c) => (c.fixTrailer = "Written-by: x\nmore"), /fixTrailer/);
+  rejects((c) => (c.gateCheck = "Review\ngate"), /gateCheck/);
+  rejects((c) => (c.noAutomergeLabel = "no\nmerge"), /noAutomergeLabel/);
+  rejects((c) => (c.requiredChecks = ["CI\n"]), /requiredChecks/);
+  rejects((c) => (c.requiredChecks = [" CI"]), /requiredChecks/);
+});
+
+test("the gate's own check can't be a required check, or the gate waits on itself", () => {
+  rejects((c) => (c.requiredChecks = ["CI", "Review gate"]), /requiredChecks/);
+});
+
+test("a depth or round cap far past what a review needs is an error", () => {
+  rejects((c) => (c.depth = { finders: 9, voters: 2, votesToPost: 2 }), /finders/);
+  rejects((c) => (c.depth = { finders: 2, voters: 9, votesToPost: 2 }), /voters/);
+  rejects((c) => (c.roundCap = 21), /roundCap/);
+});
