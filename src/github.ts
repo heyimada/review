@@ -1,4 +1,4 @@
-import { REPO } from "./config";
+import { repo as repoName } from "./config";
 import { isFixedReply } from "./findings";
 
 // Only the GitHub calls review.ts and gate.ts make. Reads use the workflow's GITHUB_TOKEN; writes use the
@@ -105,6 +105,7 @@ export function github(token: string) {
     return res.data;
   }
 
+  const REPO = repoName();
   const repo = `/repos/${REPO}`;
   const [owner, name] = REPO.split("/");
 

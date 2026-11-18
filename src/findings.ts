@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { EligibilityVerdict, Lens, LensGroup } from "./config";
+import { CONFIG, type EligibilityVerdict, type Lens, type LensGroup } from "./config";
 
 export type Severity = "important" | "nit" | "preexisting";
 export const SEVERITIES: Severity[] = ["important", "preexisting", "nit"];
@@ -47,9 +47,9 @@ export interface SummaryMarker {
   eligibility?: EligibilityVerdict;
 }
 
-const FINDING_TAG = "ether-review";
-const SUMMARY_TAG = "ether-review-summary";
-const FIXED_TAG = "ether-review-fixed";
+const FINDING_TAG = CONFIG.markerTag;
+const SUMMARY_TAG = `${CONFIG.markerTag}-summary`;
+const FIXED_TAG = `${CONFIG.markerTag}-fixed`;
 
 const normalizeTitle = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 

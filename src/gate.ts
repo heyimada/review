@@ -1,8 +1,8 @@
 // Decides whether the review App would approve a pull request at its head commit, and reports it as the "Review gate"
 // check run. Runs from main and never checks out the pull request's code.
 //
-//   bun .github/review/gate.ts --pr N [--dry-run]
-//   bun .github/review/gate.ts --sha HEAD_SHA [--dry-run]    (workflow_run: finds the open PR with that head)
+//   bun src/gate.ts --pr N [--dry-run]
+//   bun src/gate.ts --sha HEAD_SHA [--dry-run]    (workflow_run: finds the open PR with that head)
 //
 // Locally, --dry-run reads with `gh auth token` and prints the decision without posting anything.
 
@@ -186,7 +186,7 @@ async function gate(target: { pr: number } | { sha: string }, dryRun: boolean) {
   const appApprovals = prReviews.filter((r) => isReviewBot(r.user, BOT_LOGIN) && r.state === "APPROVED");
   const appEnabledAutoMerge = !!pull.auto_merge?.enabled_by && isReviewBot(pull.auto_merge.enabled_by, BOT_LOGIN);
   if (!decision.wouldApprove) {
-    for (const r of appApprovals) await write.dismissReview(number, r.id, `The review gate no longer approves ${head.slice(0, 7)}. See the Review gate check.`);
+    for (const r of appApprovals) await write.dismissReview(number, r.id, `The review gate no longer approves ${head.slice(0, 7)}. See the ${GATE_CHECK} check.`);
     if (appEnabledAutoMerge) await write.disableAutoMerge(pull.node_id);
     return;
   }
@@ -209,7 +209,7 @@ if (import.meta.main) {
   const pr = Number(values.pr);
   const sha = values.sha ?? "";
   if (!(Number.isInteger(pr) && pr > 0) && !/^[0-9a-f]{40}$/.test(sha)) {
-    console.error("usage: bun .github/review/gate.ts (--pr N | --sha HEAD_SHA) [--dry-run]");
+    console.error("usage: bun src/gate.ts (--pr N | --sha HEAD_SHA) [--dry-run]");
     process.exit(2);
   }
   try {

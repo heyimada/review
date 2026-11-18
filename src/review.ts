@@ -1,13 +1,9 @@
 // Reviews one pull request through one lens group and posts the verified findings as a single review.
 //
-//   bun .github/review/review.ts --pr N --lens bugs|security [--dry-run]
+//   bun src/review.ts --pr N --lens bugs|security [--dry-run]
 //
 // In CI, review.yml checks the PR head out into pr/. To try it locally against your Claude login without posting anything
-// (reads use `gh auth token`):
-//
-//   git fetch origin pull/2/head && git worktree add --detach pr FETCH_HEAD && find pr -type l -delete
-//   bun .github/review/review.ts --pr 2 --lens bugs --dry-run
-//   git worktree remove --force pr
+// (reads use `gh auth token`), see e2e/dry-run.sh.
 
 import { parseArgs } from "node:util";
 import { classifyEligibility, findSymlink, isFixed, runFinder, runVoter, type Context } from "./agents";
@@ -229,7 +225,7 @@ if (import.meta.main) {
   const pr = Number(values.pr);
   const lens = values.lens as LensGroup;
   if (!Number.isInteger(pr) || pr <= 0 || !(lens in LENS_GROUPS)) {
-    console.error("usage: bun .github/review/review.ts --pr N --lens bugs|security [--dry-run]");
+    console.error("usage: bun src/review.ts --pr N --lens bugs|security [--dry-run]");
     process.exit(2);
   }
   try {
