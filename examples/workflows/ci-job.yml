@@ -1,0 +1,10 @@
+# Add this job to the repository's CI workflow (on pull_request). It holds no secrets.
+jobs:
+  review-config:
+    name: Review config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: heyimada/review/actions/check@ENGINE_SHA # main

@@ -1,0 +1,59 @@
+name: Review
+description: Reviews a pull request through one lens and posts the verified findings as the review App. Run it on pull_request_target, after the trust action.
+inputs:
+  lens:
+    description: bugs or security.
+    required: true
+  client-id:
+    description: The review App's client ID.
+    required: true
+  private-key:
+    description: The review App's private key. Pass it from the caller job's review environment.
+    required: true
+  claude-token:
+    description: The Claude Code OAuth token the agents log in with.
+    required: true
+runs:
+  using: composite
+  steps:
+    # The settings come from the default branch, never the pull request's copy.
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.repository.default_branch }}
+        path: repo
+        sparse-checkout: .github
+        persist-credentials: false
+    # The pull request's code, as data: it is never installed, built or run, and the agents can only read files here.
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        path: pr
+        persist-credentials: false
+    # A symlink could point the agents' file tools outside pr/. review.ts also refuses to run if one is left.
+    - shell: bash
+      run: find pr -type l -delete
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: 1.4.0
+    # The engine is this action's own repository, at the commit the caller pinned.
+    - shell: bash
+      run: bun install --cwd "$GITHUB_ACTION_PATH/../.." --frozen-lockfile --ignore-scripts
+    - id: app
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        # resolveReviewThread is refused without contents: write, even with pull-requests: write. The agents never see
+        # this token; only review.ts uses it.
+        permission-contents: write
+        permission-pull-requests: write
+    - shell: bash
+      run: bun "$GITHUB_ACTION_PATH/../../src/review.ts" --pr "$PR" --lens "$LENS"
+      env:
+        PR: ${{ github.event.pull_request.number }}
+        LENS: ${{ inputs.lens }}
+        REVIEW_CONFIG: repo/.github/review.json
+        GITHUB_TOKEN: ${{ github.token }}
+        REVIEW_APP_TOKEN: ${{ steps.app.outputs.token }}
+        REVIEW_BOT_LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-token }}

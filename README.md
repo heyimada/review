@@ -2,15 +2,16 @@
 
 Automated pull request review for GitHub, shared by [ether](https://github.com/heyimada/ether) and [hanare](https://github.com/hanare-suite/hanare). Claude agents look for bugs and security problems, and a merge gate approves and auto-merges the changes that qualify. A `/fix` comment has an agent fix the open findings.
 
-- **Review** (`review.yml`): a bugs pass, then a security pass. Each runs several independent finders, and a finding is posted only when enough voters agree it's real. Findings that are fixed later are resolved automatically.
-- **Merge gate** (`gate.yml`): posts a "Review gate" check. The App approves and merges a change only when it qualifies: the author has write access, both reviews finished with no open findings, required CI passed, no sensitive path is touched, and the change is low-risk. Everything else needs a person.
-- **Fix** (`fix.yml`): a `/fix` comment from a maintainer has an agent edit the open findings, and the App commits the patch. A person still has to approve that commit.
+- **Review** (`actions/trust`, `actions/review`): a bugs pass, then a security pass. Each runs several independent finders, and a finding is posted only when enough voters agree it's real. Findings that are fixed later are resolved automatically.
+- **Merge gate** (`actions/gate`): posts a "Review gate" check. The App approves and merges a change only when it qualifies: the author has write access, both reviews finished with no open findings, required CI passed, no sensitive path is touched, and the change is low-risk. Everything else needs a person.
+- **Fix** (`actions/trust`, `actions/fix-edit`, `actions/fix-commit`): a `/fix` comment from a maintainer has an agent edit the open findings, and the App commits the patch. A person still has to approve that commit.
 
 ## How it stays safe
 
-The engine runs on `pull_request_target`, `workflow_run` and `issue_comment`. Each of these runs from the default branch, with secrets available:
+The engine ships as composite actions that run inside the reviewed repository's own jobs. Those jobs run on `pull_request_target`, `workflow_run` and `issue_comment`, so their workflow files come from the default branch, and they name the `review` or `fix` environment that holds the secrets:
 
-- The engine is this repository at the commit the caller pinned in `uses:`. The reusable workflows read that commit from the job's OIDC token, so the workflow and the engine can't come from different commits.
+- The engine is this repository at the commit the caller pinned in `uses:`; each action runs the engine from its own checkout (`github.action_path`).
+- The secrets stay environment secrets, which can be limited to the default branch. Composite actions, unlike reusable workflows, work this way across account owners: GitHub never passes environment secrets to a reusable workflow another owner hosts.
 - The settings are `.github/review.json` on the reviewed repository's default branch, never the pull request's copy.
 - The pull request's code is checked out into `pr/` as data. It is never installed, built or run. The agents can only read files under `pr/` (`/fix` can also edit them), and a symlink anywhere there stops them.
 - The agents never see the App token. Text they write is checked for tokens before it is posted.
@@ -21,7 +22,7 @@ The engine runs on `pull_request_target`, `workflow_run` and `issue_comment`. Ea
 1. **App.** Install the review GitHub App on the repository, with contents, pull requests and checks set to read and write.
 2. **Environments.** Create a `review` environment holding the variable `REVIEW_APP_CLIENT_ID` and the secrets `REVIEW_APP_PRIVATE_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`. For `/fix`, also create a `fix` environment holding `FIX_CLAUDE_CODE_OAUTH_TOKEN`. Restrict both to the default branch.
 3. **Config.** Add `.github/review.json`, starting from [examples/review.json](examples/review.json) or from ether's or hanare's config. `src/config.ts` documents every key. An unknown or missing key fails the run instead of being ignored. Start with `"reportOnly": true`.
-4. **Workflows.** Add the callers for review, merge gate, review trigger and fix, and the `Review config` job in CI, as in [hanare's `.github/workflows`](https://github.com/hanare-suite/hanare/tree/main/.github/workflows). Pin every `uses:` to the same full commit SHA. The callers pass no secrets: each job reads them from the `review` or `fix` environment it names.
+4. **Workflows.** Copy [examples/workflows](examples/workflows) into `.github/workflows/`, and add the job in `ci-job.yml` to CI. Replace `ENGINE_SHA` with one full commit SHA of this repository everywhere. A Dependabot group on `heyimada/review*` keeps them together.
 5. **CODEOWNERS.** List the sensitive paths in `.github/CODEOWNERS` too. The `Review config` check fails on a sensitive glob that no entry covers, and on any config error. A broken config on the default branch would stop every review.
 6. **Branch protection.** Require the CI checks named in `requiredChecks` and allow auto-merge. Turn `reportOnly` off once the findings have proved useful.
 

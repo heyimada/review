@@ -1,0 +1,70 @@
+name: Review trust
+description: Decides whether the review or /fix may run, from the live permissions of the people involved, read through the review App.
+inputs:
+  for:
+    description: "review: the pull request's author must have write access. fix: the commenter and the author both must, and the comment must start with /fix."
+    default: review
+  client-id:
+    description: The review App's client ID.
+    required: true
+  private-key:
+    description: The review App's private key. Pass it from the caller job's review environment.
+    required: true
+outputs:
+  trusted:
+    description: "\"true\" when the review or /fix may run."
+    value: ${{ steps.check.outputs.trusted }}
+  sha:
+    description: For /fix, the pull request's head commit when trusted.
+    value: ${{ steps.check.outputs.sha }}
+  bot-login:
+    description: The App's login, like name[bot].
+    value: ${{ steps.app.outputs.app-slug }}[bot]
+runs:
+  using: composite
+  steps:
+    # The permission lookup goes through the App, whose token is verified to read it; GITHUB_TOKEN with no permissions
+    # isn't verified to.
+    - id: app
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        permission-pull-requests: read
+    # Live permissions, not who pushed last. Bots and forks are never trusted. No fallback: if a lookup fails, the step
+    # fails visibly instead of quietly skipping every review.
+    - id: check
+      shell: bash
+      env:
+        FOR: ${{ inputs.for }}
+        GH_TOKEN: ${{ steps.app.outputs.token }}
+        AUTHOR: ${{ github.event.pull_request.user.login }}
+        AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        PR: ${{ github.event.issue.number }}
+        BODY: ${{ github.event.comment.body }}
+        COMMENTER: ${{ github.event.comment.user.login }}
+        COMMENTER_TYPE: ${{ github.event.comment.user.type }}
+      run: |
+        trusted=false
+        sha=
+        writer() { case "$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$1/permission" --jq .permission)" in admin | maintain | write) return 0 ;; esac; return 1; }
+        case "$FOR" in
+          review)
+            if [ "$AUTHOR_TYPE" = User ] && [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] && writer "$AUTHOR"; then trusted=true; fi
+            ;;
+          fix)
+            if [[ "$BODY" =~ ^/fix([[:space:]]|$) ]] && [ "$COMMENTER_TYPE" = User ] && writer "$COMMENTER"; then
+              pull=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")
+              author=$(jq -r .user.login <<<"$pull")
+              if [ "$(jq -r .state <<<"$pull")" = open ] && [ "$(jq -r .user.type <<<"$pull")" = User ] \
+                && [ "$(jq -r .head.repo.full_name <<<"$pull")" = "$GITHUB_REPOSITORY" ] && writer "$author"; then
+                trusted=true
+                sha=$(jq -r .head.sha <<<"$pull")
+              fi
+            fi
+            ;;
+          *) echo "::error::for must be review or fix"; exit 1 ;;
+        esac
+        echo "trusted=$trusted" >> "$GITHUB_OUTPUT"
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"

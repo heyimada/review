@@ -1,0 +1,58 @@
+name: Fix (commit)
+description: Checks the patch fix-edit uploaded and commits it to the pull request's branch as the review App, or says on the pull request why it didn't. Never runs an agent.
+inputs:
+  sha:
+    description: The head commit the trust action returned.
+    required: true
+  client-id:
+    description: The review App's client ID.
+    required: true
+  private-key:
+    description: The review App's private key. Pass it from the caller job's review environment.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.repository.default_branch }}
+        path: repo
+        sparse-checkout: .github
+        persist-credentials: false
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ inputs.sha }}
+        path: pr
+        persist-credentials: false
+    - shell: bash
+      run: find pr -type l -delete
+    # Missing when the fix job failed; fix.ts reports that. The job that made it ran an agent over the pull request's
+    # code, which could have put anything in it, so it goes in its own directory where it can't replace anything here.
+    - uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: fix
+        path: ${{ runner.temp }}/fix-artifact
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: 1.4.0
+    - shell: bash
+      run: bun install --cwd "$GITHUB_ACTION_PATH/../.." --frozen-lockfile --ignore-scripts
+    - id: app
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        permission-contents: write
+        permission-pull-requests: write
+    - shell: bash
+      run: bun "$GITHUB_ACTION_PATH/../../src/fix.ts" commit --pr "$PR" --sha "$SHA" --from "$RUNNER_TEMP/fix-artifact"
+      env:
+        PR: ${{ github.event.issue.number }}
+        SHA: ${{ inputs.sha }}
+        REVIEW_CONFIG: repo/.github/review.json
+        FIX_BY: ${{ github.event.comment.user.login }}
+        FIX_BY_ID: ${{ github.event.comment.user.id }}
+        GITHUB_TOKEN: ${{ github.token }}
+        REVIEW_APP_TOKEN: ${{ steps.app.outputs.token }}
+        REVIEW_BOT_LOGIN: ${{ steps.app.outputs.app-slug }}[bot]

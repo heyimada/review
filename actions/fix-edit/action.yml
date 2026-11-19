@@ -1,0 +1,55 @@
+name: Fix (edit)
+description: An agent edits the pull request checkout to fix the open review findings and uploads the patch. Holds only a Claude token; fix-commit checks and commits the patch.
+inputs:
+  sha:
+    description: The head commit the trust action returned.
+    required: true
+  bot-login:
+    description: The App's login the trust action returned, to tell its findings apart.
+    required: true
+  claude-token:
+    description: A Claude Code OAuth token for /fix, from the caller job's fix environment.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.repository.default_branch }}
+        path: repo
+        sparse-checkout: .github
+        persist-credentials: false
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ inputs.sha }}
+        path: pr
+        persist-credentials: false
+    # A symlink could point the agent's file tools outside pr/. fix.ts also refuses to run if one is left.
+    - shell: bash
+      run: find pr -type l -delete
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: 1.4.0
+    - shell: bash
+      run: bun install --cwd "$GITHUB_ACTION_PATH/../.." --frozen-lockfile --ignore-scripts
+    - shell: bash
+      run: bun "$GITHUB_ACTION_PATH/../../src/fix.ts" findings --pr "$PR" > findings.json
+      env:
+        PR: ${{ github.event.issue.number }}
+        REVIEW_CONFIG: repo/.github/review.json
+        GITHUB_TOKEN: ${{ github.token }}
+        REVIEW_BOT_LOGIN: ${{ inputs.bot-login }}
+    - shell: bash
+      run: bun "$GITHUB_ACTION_PATH/../../src/fix.ts" edit --sha "$SHA"
+      env:
+        SHA: ${{ inputs.sha }}
+        REVIEW_CONFIG: repo/.github/review.json
+        FIX_REQUEST: ${{ github.event.comment.body }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-token }}
+    - uses: actions/upload-artifact@v7
+      with:
+        name: fix
+        path: |
+          fix.patch
+          fix.json
+        retention-days: 1

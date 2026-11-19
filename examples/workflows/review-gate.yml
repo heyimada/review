@@ -1,0 +1,35 @@
+name: Merge gate
+
+# Posts the "Review gate" check run (as the review App) with its decision for the pull request's head commit. When the
+# change qualifies, the App approves that commit and merges it; otherwise a person has to approve. Never checks out the
+# pull request's code. Re-runs when the pull request changes, and through workflow_run when a review, CI or a human
+# review finishes; workflow_run always runs from main with secrets, also for forks.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  workflow_run:
+    workflows: [Review, Review trigger, CI]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  # Keyed on the head commit for both events. A running gate finishes instead of being cancelled; the gate is idempotent.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: review
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    steps:
+      - uses: heyimada/review/actions/gate@ENGINE_SHA # main
+        with:
+          client-id: ${{ vars.REVIEW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }}
